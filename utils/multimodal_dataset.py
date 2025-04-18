@@ -18,17 +18,16 @@ class CTMultimodalDataset(Dataset):
         self.max_length = max_length
         self.transform = transform
 
-        # 读取报告和标签 CSV
+        # 读取 CSV 数据
         self.reports_df = pd.read_csv(REPORTS[split])
         self.labels_df = pd.read_csv(LABELS[split])
 
-        # 创建新列：拼接报告字段 Findings_EN + Impressions_EN
+        # 构建报告字段
         self.reports_df["report"] = (
             self.reports_df["Findings_EN"].fillna("") + " " +
             self.reports_df["Impressions_EN"].fillna("")
         )
 
-        # 构造样本列表
         self.samples = self._merge_metadata()
 
     def _merge_metadata(self):
@@ -41,7 +40,7 @@ class CTMultimodalDataset(Dataset):
         samples = []
         for vid in common_ids:
             samples.append({
-                "id": vid,
+                "id": vid,  # e.g. train_1_a_1.nii.gz
                 "report": report_dict[vid],
                 "labels": np.array(list(label_dict[vid].values()), dtype=np.float32)
             })
@@ -52,11 +51,20 @@ class CTMultimodalDataset(Dataset):
 
     def __getitem__(self, idx):
         sample = self.samples[idx]
-        sample_id = sample["id"]
-        patient_folder = "_".join(sample_id.split("_")[:2])  # e.g., train_1
+        sample_id = sample["id"]  # e.g. train_1_a_1.nii.gz
 
-        # 图像路径
-        image_path = os.path.join(IMAGE_DIR, patient_folder, f"{sample_id}.nii.gz")
+        # 文件名去后缀取路径结构
+        id_core = sample_id.replace(".nii.gz", "")  # train_1_a_1 → ['train', '1', 'a', '1']
+        parts = id_core.split("_")  # ['train', '1', 'a', '1']
+        level1 = f"{parts[0]}_{parts[1]}"         # train_1
+        level2 = f"{parts[0]}_{parts[1]}_{parts[2]}"  # train_1_a
+
+        # 构建完整路径
+        image_path = os.path.join(IMAGE_DIR, level1, level2, sample_id)
+
+        if not os.path.exists(image_path):
+            raise FileNotFoundError(f"❌ 图像文件不存在: {image_path}")
+
         image_data = nib.load(image_path).get_fdata().astype(np.float32)
         image_tensor = torch.from_numpy(image_data).unsqueeze(0)  # [1, D, H, W]
 
@@ -94,6 +102,8 @@ if __name__ == "__main__":
     dataset = CTMultimodalDataset(split="train", tokenizer=tokenizer)
 
     print(f"📦 样本数: {len(dataset)}")
+    
+    '''
     loader = DataLoader(dataset, batch_size=2, shuffle=True)
 
     batch = next(iter(loader))
@@ -101,7 +111,6 @@ if __name__ == "__main__":
     print("🖼️ 图像 shape:", batch["image"].shape)
     print("📝 文本 input_ids shape:", batch["text"]["input_ids"].shape)
     print("🏷️ 标签 shape:", batch["label"].shape)
-
     # 可视化第一张图像的中间切片
     volume = batch["image"][0, 0].numpy()
     z = volume.shape[2] // 2
@@ -109,3 +118,23 @@ if __name__ == "__main__":
     plt.title("中间切片")
     plt.axis("off")
     plt.show()
+    '''
+    
+    # 查找目标样本索引
+    target_id = "train_1_a_1.nii.gz"
+    idx = next((i for i, s in enumerate(dataset.samples) if s["id"] == target_id), None)
+
+    if idx is None:
+        print(f"❌ 未找到样本 {target_id}")
+    else:
+        sample = dataset[idx]
+        print("✅ 样本 ID:", sample["id"])
+        print("📝 报告前200字:\n", sample["text"]["input_ids"][:10], "...")  # or sample["report"]
+
+        # 可视化图像中间层
+        volume = sample["image"][0].numpy()
+        z = volume.shape[2] // 2
+        plt.imshow(volume[:, :, z], cmap="gray")
+        plt.title(f"{target_id} - 中间切片")
+        plt.axis("off")
+        plt.show()
