@@ -35,7 +35,7 @@ df_filtered["impression_only"] = df_filtered["Impressions_EN"]
 # 🔍 添加结构关键词提取列
 # ----------------------
 
-# 关键词词典
+# Keyword dictionary
 organs = ["lung", "heart", "pleura", "mediastinum", "lymph", "trachea", "bronchi"]
 abnormalities = ["nodule", "opacity", "effusion", "calcification", "atelectasis", "emphysema"]
 
@@ -58,12 +58,12 @@ def classify_impression(text):
     else:
         return "other"
 
-# 应用提取逻辑
+# Apply extraction logic
 df_filtered["Mentioned_Organs"] = df_filtered["Findings_EN"].apply(lambda x: extract_keywords(x, organs))
 df_filtered["Abnormality_Keywords"] = df_filtered["Findings_EN"].apply(lambda x: extract_keywords(x, abnormalities))
 df_filtered["Impression_Category"] = df_filtered["Impressions_EN"].apply(classify_impression)
 
-# 构建 keyword prompt 文本
+# Construct the keyword prompt text
 def build_keyword_prompt(row):
     parts = []
     if row["Mentioned_Organs"]:

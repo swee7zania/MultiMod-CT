@@ -21,7 +21,7 @@ def center_crop_depth(image, target_depth=128):
 
 import torch.nn.functional as F
 
-def resize_hw(image, target_hw=(256, 256)):
+def resize_hw(image, target_hw):
     """
     image: [1, D, H, W]
     returns: resized image [1, D, target_H, target_W]
@@ -51,15 +51,17 @@ class CTReportMCQADataset(Dataset):
         image_path = entry["image_path"]
         metadata_prompt = entry["metadata_prompt"]
         options = entry["options"]
-
-        # 图像加载
+    
+        # ✅ 图像加载
         img_nii = nib.load(image_path)
         image = img_nii.get_fdata()
         image = torch.tensor(image).unsqueeze(0).float()  # [1, D, H, W]
-        
-        # ✅ 添加统一尺寸处理
-        image = center_crop_depth(image, target_depth=128)
-        image = resize_hw(image, target_hw=(256, 256))  # resize 到统一高宽
+    
+        # ✅ 修改尺寸（更小、提速）
+        #image = center_crop_depth(image, target_depth=64)            # 中心裁剪深度
+        #image = resize_hw(image, target_hw=(128, 128))               # resize 高宽
+        image = center_crop_depth(image, target_depth=32)
+        image = resize_hw(image, target_hw=(96, 96))  # 更小空间分辨率
         
         if self.image_transform:
             image = self.image_transform(image)
@@ -70,7 +72,9 @@ class CTReportMCQADataset(Dataset):
         label_index = -1
 
         for i, opt in enumerate(options):
-            full_text = metadata_prompt + " " + opt["text"]
+            #不要 prompt 试试
+            #full_text = metadata_prompt + " " + opt["text"]
+            full_text = opt["text"]
             encoded = self.tokenizer(
                 full_text,
                 padding="max_length",
@@ -97,7 +101,7 @@ class CTReportMCQADataset(Dataset):
 # ✅ 示例主函数：直接运行文件测试数据加载
 # -------------------------------------------
 if __name__ == "__main__":
-    jsonl_path = "ctrate_mcqa_full_report.jsonl"  # 请确认路径存在
+    jsonl_path = "ctrate_mcqa_full_report_train.jsonl"  # 请确认路径存在
 
     print(f"📂 正在加载数据集: {jsonl_path}")
     dataset = CTReportMCQADataset(
